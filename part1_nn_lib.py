@@ -145,7 +145,7 @@ class SigmoidLayer(Layer):
         #                       ** START OF YOUR CODE **
         #######################################################################
         derivative = self._cache_current * (1 - self._cache_current)
-        return grad_z * self._cache_current
+        return grad_z * derivative
 
         #######################################################################
         #                       ** END OF YOUR CODE **
