@@ -377,11 +377,11 @@ def example_main():
     regressor.fit(x_train, y_train)
     save_regressor(regressor)
 
-    # Prediction on test data
-    predictions = regressor.predict(x_test)
+    # # Prediction on test data
+    # predictions = regressor.predict(x_test)
 
-    # Print predictions
-    print(predictions)
+    # # Print predictions
+    # print(predictions)
 
     # Error
     error = regressor.score(x_test, y_test)
