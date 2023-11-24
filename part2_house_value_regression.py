@@ -26,6 +26,8 @@ class Regressor():
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+
+        # Initialize preprocessing parameters
         self.x_label_binarizer = LabelBinarizer()
         self.x_numerical_scaler = MinMaxScaler()
         self.y_numerical_scaler = MinMaxScaler()
@@ -74,6 +76,8 @@ class Regressor():
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+
+        # Get categorical and numerical columns
         categorical_columns = x.select_dtypes(include=['object']).columns
         numerical_columns = x.select_dtypes(include=['float64', 'int64']).columns
 
@@ -187,11 +191,6 @@ class Regressor():
                 self.update_parameters(gradients)
 
         return self
-
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
     
     def _sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
@@ -203,6 +202,16 @@ class Regressor():
         # Calculate Mean Squared Error loss
         loss = np.mean((predictions - y) ** 2)
         return loss
+    
+    def forward_pass(self, x):
+        hidden_layer_input = np.dot(x, self.weights_input_hidden) + self.bias_input_hidden
+        hidden_layer_output = self._sigmoid(hidden_layer_input)
+
+        # The output layer input is the prediction as there is no activation function on the output layer
+        output_layer_input = np.dot(hidden_layer_output, self.weights_hidden_output) + self.bias_hidden_output
+        
+        return {'predictions': output_layer_input,
+                'hidden_layer_output': hidden_layer_output}
 
     def forward_pass(self, x):
         hidden_layer_input = np.dot(x, self.weights_input_hidden) + self.bias_input_hidden
@@ -237,6 +246,9 @@ class Regressor():
         self.bias_input_hidden -= self.learning_rate * gradients['bias_input_hidden']
         self.bias_hidden_output -= self.learning_rate * gradients['bias_hidden_output']
 
+        #######################################################################
+        #                       ** END OF YOUR CODE **
+        #######################################################################
             
     def predict(self, x):
         """
@@ -263,7 +275,6 @@ class Regressor():
         predictions = self.y_numerical_scaler.inverse_transform(raw_predictions)
     
         return predictions
-
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -365,6 +376,12 @@ def example_main():
     regressor = Regressor(x_train, nb_epoch = 10)
     regressor.fit(x_train, y_train)
     save_regressor(regressor)
+
+    # Prediction on test data
+    predictions = regressor.predict(x_test)
+
+    # Print predictions
+    print(predictions)
 
     # Error
     error = regressor.score(x_test, y_test)
