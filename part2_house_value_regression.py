@@ -3,11 +3,13 @@ import pickle
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_error
 
 class Regressor():
 
-    def __init__(self, x, nb_epoch = 1000, learning_rate = 0.01):
+    def __init__(self, x, nb_epoch = 1000, learning_rate = 0.01, hidden_size = 4):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """ 
@@ -25,24 +27,26 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
         self.x_label_binarizer = LabelBinarizer()
-        self.x_numerical_scaler = StandardScaler()
-        self.y_numerical_scaler = StandardScaler()
-        self.categorical_columns = []
+        self.x_numerical_scaler = MinMaxScaler()
+        self.y_numerical_scaler = MinMaxScaler()
         
+        # Initialize model parameters
         X, _ = self._preprocessor(x, training=True)
         self.input_size = X.shape[1]
         self.output_size = 1
-        self.hidden_size = 4
+        self.hidden_size = hidden_size
         self.nb_epoch = nb_epoch
-
-        # Initialize model parameters
         self.learning_rate = learning_rate
-        self.weights_input_hidden = np.random.randn(self.input_size, self.hidden_size)
-        self.bias_input_hidden = np.zeros((1, self.hidden_size))
-        self.weights_hidden_output = np.random.randn(self.hidden_size, self.output_size)
-        self.bias_hidden_output = np.zeros((1, self.output_size))
 
+        # Xavier initialization for weights between input and hidden layer
+        self.weights_input_hidden = np.random.randn(self.input_size, self.hidden_size) * np.sqrt(1 / self.input_size)
+        self.bias_input_hidden = np.zeros((1, self.hidden_size))
+
+        # Xavier initialization for weights between hidden and output layer
+        self.weights_hidden_output = np.random.randn(self.hidden_size, self.output_size) * np.sqrt(1 / self.hidden_size)
+        self.bias_hidden_output = np.zeros((1, self.output_size))
         return
+
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -70,55 +74,64 @@ class Regressor():
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-
         categorical_columns = x.select_dtypes(include=['object']).columns
         numerical_columns = x.select_dtypes(include=['float64', 'int64']).columns
 
-        self.categorical_columns = categorical_columns
-
+        # Make a copy of x and y (if applicable) to avoid modifying the original data
         x_copy = x.copy()
         y_copy = None if (y is None) else y.copy()
-
-        # Fill missing values in categorical columns with mode
+        
+        # Fill missing values in categorical columns with the mode
         for column in categorical_columns:
             x_copy[column].fillna(x_copy[column].mode()[0], inplace=True)
 
-        # Fill missing values in numeric columns with mean
+        # Fill missing values in numeric columns with the mean
         for column in numerical_columns:
             x_copy[column].fillna(x_copy[column].mean(), inplace=True)
     
-        # Preprocess x based on training/testing
+        # Preprocess x based on training or testing
         if training:
-            # Create one-hot encoder and scaler as this is a training dataset
+            # Create a new one-hot encoder and scaler as this is a training dataset
             self.x_label_binarizer = LabelBinarizer()
-            self.x_numerical_scaler = StandardScaler()
+            self.x_numerical_scaler = MinMaxScaler()
 
-            # One-hot encoding categorical values
+            # Normalise numerical values
+            x_copy[numerical_columns] = self.x_numerical_scaler.fit_transform(x_copy[numerical_columns])
+
+            # One-hot encode categorical values
             for column in categorical_columns:
-                transformed_categorical_col = self.x_label_binarizer.fit_transform(x_copy[column])
-                transformed_cols_df = pd.DataFrame(transformed_categorical_col, columns=self.x_label_binarizer.classes_)
-                x_copy = pd.concat([x_copy, transformed_cols_df], axis=1).drop(column, axis=1)
-            
-            # Normalizing numerical values
-            for column in numerical_columns:
-                x_copy[column] = self.x_numerical_scaler.fit_transform(x_copy[column].values.reshape(-1, 1))
+                # Fit the label binarizer on the categorical column and create a new dataframe with the transformed columns
+                transformed_categorical_cols = self.x_label_binarizer.fit_transform(x_copy[column])
+                transformed_cols_df = pd.DataFrame(transformed_categorical_cols, columns=self.x_label_binarizer.classes_)
+
+                # Concatenate the transformed columns to the original dataframe and remove the original categorical column
+                x_copy = pd.concat([x_copy.reset_index(drop=True), transformed_cols_df.reset_index(drop=True)], axis=1)
+                x_copy.drop(column, axis=1, inplace=True)
+
         else:
-            # One-hot encoding categorical values
+            # Normalise numerical values
+            x_copy[numerical_columns] = self.x_numerical_scaler.transform(x_copy[numerical_columns])
+
+            # One-hot encode categorical values
             for column in categorical_columns:
-                transformed_categorical_col = self.x_label_binarizer.transform(x_copy[column])
-                transformed_cols_df = pd.DataFrame(transformed_categorical_col, columns=self.x_label_binarizer.classes_)
-                x_copy = pd.concat([x_copy, transformed_cols_df], axis=1).drop(column, axis=1)
-            
-            # Normalizing numerical values
-            for column in numerical_columns:
-                x_copy[column] = self.x_numerical_scaler.transform(x_copy[column].values.reshape(-1, 1))
+                # Transform the categorical column and create a new dataframe with the transformed columns
+                transformed_categorical_cols = self.x_label_binarizer.transform(x_copy[column])
+                transformed_cols_df = pd.DataFrame(transformed_categorical_cols, columns=self.x_label_binarizer.classes_)
+                
+                # Concatenate the transformed columns to the original dataframe and remove the original categorical column
+                x_copy = pd.concat([x_copy.reset_index(drop=True), transformed_cols_df.reset_index(drop=True)], axis=1)
+                x_copy.drop(column, axis=1, inplace=True)
 
         # Preprocess y if necessary
         if y_copy is not None:
             if training:
-                self.y_numerical_scaler = StandardScaler()
+                # Create a new scaler as this is a training dataset
+                self.y_numerical_scaler = MinMaxScaler()
+
+                # Normalise numerical values
                 y_copy = self.y_numerical_scaler.fit_transform(y_copy if isinstance(y_copy, pd.DataFrame) else y_copy.values.reshape(-1, 1))
             else:
+                # Normalise numerical values
                 y_copy = self.y_numerical_scaler.transform(y_copy if isinstance(y_copy, pd.DataFrame) else y_copy.values.reshape(-1, 1))
 
         # Convert x_copy to torch tensor
@@ -126,12 +139,13 @@ class Regressor():
 
         return x_copy, y_copy
 
+
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
 
         
-    def fit(self, x, y):
+    def fit(self, x, y, batch_size=32, shuffle=True):
         """
         Regressor training function
 
@@ -139,29 +153,41 @@ class Regressor():
             - x {pd.DataFrame} -- Raw input array of shape 
                 (batch_size, input_size).
             - y {pd.DataFrame} -- Raw output array of shape (batch_size, 1).
+            - batch_size {int} -- Size of the batch for training.
+            - shuffle {bool} -- Whether to shuffle the data before training.
 
         Returns:
             self {Regressor} -- Trained model.
-
         """
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
+        X, Y = self._preprocessor(x, y=y, training=True)  # Preprocess the data
 
-        X, Y = self._preprocessor(x, y = y, training = True) # Do not forget
-        for epoch in range(self.nb_epoch):
-            hidden_layer_input = np.dot(X, self.weights_input_hidden) + self.bias_input_hidden
-            hidden_layer_output = self._sigmoid(hidden_layer_input)
-            output_layer_input = np.dot(hidden_layer_output, self.weights_hidden_output) + self.bias_hidden_output
-            predictions = output_layer_input  # No activation function for output in regression
+        # Get the number of data points
+        data_size = X.shape[0]
+        
+        for _ in range(self.nb_epoch):
+            if shuffle:
+                # Shuffle the data
+                indices = np.random.permutation(data_size)
+                X = X[indices]
+                Y = Y[indices]
 
-            loss = self.calculate_loss(predictions, Y)
-            print(loss)
+            # Iterate over batches
+            for i in range(0, data_size, batch_size):
+                # Get the current batch
+                x_batch = X[i:i + batch_size]
+                y_batch = Y[i:i + batch_size]
 
-            gradients = self.backward_pass(X, hidden_layer_output, predictions, Y)
-            self.update_parameters(gradients)
+                forward_pass_output = self.forward_pass(x_batch)
+                predictions = forward_pass_output['predictions']
+                hidden_layer_output = forward_pass_output['hidden_layer_output']
+    
+                loss = self.calculate_loss(predictions, y_batch)
+                gradients = self.backward_pass(x_batch, hidden_layer_output, predictions, y_batch)
+                self.update_parameters(gradients)
+
         return self
+
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -178,12 +204,25 @@ class Regressor():
         loss = np.mean((predictions - y) ** 2)
         return loss
 
+    def forward_pass(self, x):
+        hidden_layer_input = np.dot(x, self.weights_input_hidden) + self.bias_input_hidden
+        hidden_layer_output = self._sigmoid(hidden_layer_input)
+
+        # The output layer input is the prediction as there is no activation function on the output layer
+        output_layer_input = np.dot(hidden_layer_output, self.weights_hidden_output) + self.bias_hidden_output
+        
+        return {'predictions': output_layer_input,
+                'hidden_layer_output': hidden_layer_output}
+
     def backward_pass(self, x, hidden_layer_output, predictions, y):
+        # Calculate the error
         output_error = 2 * (predictions - y) / len(y)
 
+        # Backpropagate the error
         d_output = output_error
         d_hidden_layer = np.dot(d_output, self.weights_hidden_output.T) * self._sigmoid_derivative(hidden_layer_output)
 
+        # Calculate the gradients
         gradients_hidden_output = np.dot(hidden_layer_output.T, d_output)
         gradients_input_hidden = np.dot(x.T, d_hidden_layer)
 
@@ -216,21 +255,15 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
         X, _ = self._preprocessor(x, training = False) # Do not forget
+        
+        # Forward pass to get the scaled predictions
+        raw_predictions = self.forward_pass(X)['predictions']
 
-        hidden_layer_input = np.dot(X, self.weights_input_hidden) + self.bias_input_hidden
-        hidden_layer_output = self._sigmoid(hidden_layer_input)
-        output_layer_input = np.dot(hidden_layer_output, self.weights_hidden_output) + self.bias_hidden_output
-        predictions = output_layer_input
+        # Inverse transform the predictions to get the original values
+        predictions = self.y_numerical_scaler.inverse_transform(raw_predictions)
+    
+        return predictions
 
-        predictions = self.y_numerical_scaler.inverse_transform(predictions)
-
-        categorical_cols = []
-        # Inverse one-hot encoding for categorical columns
-        if self.categorical_columns.size > 0:
-            transformed_cols = X[:, :len(self.original_columns)]
-            categorical_cols = self.x_label_binarizer.inverse_transform(transformed_cols)
-
-        return predictions, self.x_numerical_scaler.inverse_transform(X), categorical_cols
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -254,8 +287,9 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        X, Y = self._preprocessor(x, y = y, training = False) # Do not forget
-        return 0 # Replace this code with your own
+        _, Y = self._preprocessor(x, y = y, training = False) # Do not forget
+        y_output = self.predict(x)
+        return r2_score(y,y_output)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -320,19 +354,20 @@ def example_main():
     data = pd.read_csv("housing.csv") 
 
     # Splitting input and output
-    x_train = data.loc[:, data.columns != output_label]
-    y_train = data.loc[:, [output_label]]
+    x = data.loc[:, data.columns != output_label]
+    y = data.loc[:, [output_label]]
 
     # Training
     # This example trains on the whole available dataset. 
     # You probably want to separate some held-out data 
     # to make sure the model isn't overfitting
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.20, random_state=0)
     regressor = Regressor(x_train, nb_epoch = 10)
     regressor.fit(x_train, y_train)
     save_regressor(regressor)
 
     # Error
-    error = regressor.score(x_train, y_train)
+    error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
 
 
