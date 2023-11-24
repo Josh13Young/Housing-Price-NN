@@ -6,6 +6,7 @@ from sklearn.preprocessing import LabelBinarizer
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_absolute_error
+import matplotlib.pyplot as plt
 
 class Regressor():
 
@@ -251,10 +252,6 @@ class Regressor():
         self.weights_hidden_output -= learning_rate * gradients['weights_hidden_output']
         self.bias_input_hidden -= learning_rate * gradients['bias_input_hidden']
         self.bias_hidden_output -= learning_rate * gradients['bias_hidden_output']
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
             
     def predict(self, x):
         """
@@ -335,7 +332,7 @@ def load_regressor():
 
 
 
-def RegressorHyperParameterSearch(): 
+def RegressorHyperParameterSearch(params): 
     # Ensure to add whatever inputs you deem necessary to this function
     """
     Performs a hyper-parameter for fine-tuning the regressor implemented 
@@ -352,8 +349,99 @@ def RegressorHyperParameterSearch():
     #######################################################################
     #                       ** START OF YOUR CODE **
     #######################################################################
+    xpoints=np.array([])
+    ypoints=np.array([])
+    r2points=np.array([])
+    r2xpoints=np.array([])
+    max=0
+    bestlr=0.01
+    bestepoch=10
+    besthidsize=5
+    bestbatchsize=1
+    if params == 'lr,epoch':
+        for l in range(1, 101, 10):
+            lr = l/100
+            for ep in range(1, 10):
+                epoch = 2**ep
+                r1=example_main(epoch=epoch, lr=lr)
+                r3=example_main(epoch=epoch, lr=lr)
+                r2=(r1+r3)/2
+                if r2>max:
+                    max=r2
+                    bestlr=lr
+                    bestepoch=epoch
+        print("best lr, epoch combination: lr ", bestlr, "epoch ", bestepoch, "R2 ", max)
+        return bestlr, bestepoch
+    if params == 'lr':
+        for l in range(1, 101, 10):
+            lr = l/100
+            r1=example_main(lr=lr)
+            r3=example_main(lr=lr)
+            r2=(r1+r3)/2
+            xpoints=np.append(xpoints,lr)
+            ypoints=np.append(ypoints,r1)
+            xpoints=np.append(xpoints,lr)
+            ypoints=np.append(ypoints,r3)
+            r2xpoints=np.append(r2xpoints,lr)
+            r2points=np.append(r2points,r2)
+            if r2>max:
+                max=r2
+                bestlr=lr
+        print("best lr: ", bestlr, "R2 ", max)
+    if params == 'epoch':
+        for ep in range(0, 8):
+            epoch = 10  * (2 ** ep)
+            r1=example_main(epoch=epoch)
+            r3=example_main(epoch=epoch)
+            r2=(r1+r3)/2
+            xpoints=np.append(xpoints,epoch)
+            ypoints=np.append(ypoints,r1)
+            xpoints=np.append(xpoints,epoch)
+            ypoints=np.append(ypoints,r3)
+            r2xpoints=np.append(r2xpoints,epoch)
+            r2points=np.append(r2points,r2)
+            if r2>max:
+                max=r2
+                bestepoch=epoch
+        print("best epoch: ", bestepoch, "R2 ", max)
+    if params == 'hiddensize':
+        for hidsize in range(2,14,2):
+            print(hidsize)
+            r1=example_main(hidden_size=hidsize)
+            r3=example_main(hidden_size=hidsize)
+            r2=(r1+r3)/2
+            xpoints=np.append(xpoints,hidsize)
+            ypoints=np.append(ypoints,r1)
+            xpoints=np.append(xpoints,hidsize)
+            ypoints=np.append(ypoints,r3)
+            r2xpoints=np.append(r2xpoints,hidsize)
+            r2points=np.append(r2points,r2)
+            if r2>max:
+                max=r2
+                besthidsize=hidsize
+        print("best hidden_size: ", besthidsize, "R2 ", max)
+    if params == 'batchsize':
+        for batchsize in range(8, 65, 8):
+            r1=example_main(batch_size = batchsize)
+            r3=example_main(batch_size = batchsize)
+            r2=(r1+r3)/2
+            xpoints=np.append(xpoints,batchsize)
+            ypoints=np.append(ypoints,r1)
+            xpoints=np.append(xpoints,batchsize)
+            ypoints=np.append(ypoints,r3)
+            r2xpoints=np.append(r2xpoints,batchsize)
+            r2points=np.append(r2points,r2)
+            if r2>max:
+                max=r2
+                bestbatchsize=batchsize
+        print("best batch_size: ", bestbatchsize, "R2 ", max)
 
-    return  # Return the chosen hyper parameters
+    plt.plot(xpoints,ypoints,'ro')
+    plt.plot(r2xpoints,r2points,'b-')
+    plt.show()
+    plt.savefig('hpsearchgraph.png')
+
+    return  bestlr, bestepoch, besthidsize, bestbatchsize# Return the chosen hyper parameters
 
     #######################################################################
     #                       ** END OF YOUR CODE **
@@ -361,13 +449,9 @@ def RegressorHyperParameterSearch():
 
 
 
-def example_main():
+def example_main(epoch = 320, lr = 0.21, hidden_size = 10, batch_size = 24):
 
     output_label = "median_house_value"
-
-    # Use pandas to read CSV data as it contains various object types
-    # Feel free to use another CSV reader tool
-    # But remember that LabTS tests take Pandas DataFrame as inputs
     data = pd.read_csv("housing.csv") 
 
     # Splitting input and output
@@ -375,24 +459,17 @@ def example_main():
     y = data.loc[:, [output_label]]
 
     # Training
-    # This example trains on the whole available dataset. 
-    # You probably want to separate some held-out data 
-    # to make sure the model isn't overfitting
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.20, random_state=0)
-    regressor = Regressor(x_train, nb_epoch = 10)
-    regressor.fit(x_train, y_train)
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.20)
+    regressor = Regressor(x_train, nb_epoch = epoch, learning_rate = lr, hidden_size = hidden_size)
+    regressor.fit(x_train, y_train, batch_size = batch_size)
     save_regressor(regressor)
-
-    # # Prediction on test data
-    # predictions = regressor.predict(x_test)
-
-    # # Print predictions
-    # print(predictions)
 
     # Error
     error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
+    return error
 
 
 if __name__ == "__main__":
     example_main()
+    #RegressorHyperParameterSearch('batchsize')
