@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_absolute_error
 
@@ -29,8 +29,8 @@ class Regressor():
 
         # Initialize preprocessing parameters
         self.x_label_binarizer = LabelBinarizer()
-        self.x_numerical_scaler = MinMaxScaler()
-        self.y_numerical_scaler = MinMaxScaler()
+        self.x_numerical_scaler = StandardScaler()
+        self.y_numerical_scaler = StandardScaler()
         
         # Initialize model parameters
         X, _ = self._preprocessor(x, training=True)
@@ -97,7 +97,7 @@ class Regressor():
         if training:
             # Create a new one-hot encoder and scaler as this is a training dataset
             self.x_label_binarizer = LabelBinarizer()
-            self.x_numerical_scaler = MinMaxScaler()
+            self.x_numerical_scaler = StandardScaler()
 
             # Normalise numerical values
             x_copy[numerical_columns] = self.x_numerical_scaler.fit_transform(x_copy[numerical_columns])
@@ -130,7 +130,7 @@ class Regressor():
         if y_copy is not None:
             if training:
                 # Create a new scaler as this is a training dataset
-                self.y_numerical_scaler = MinMaxScaler()
+                self.y_numerical_scaler = StandardScaler()
 
                 # Normalise numerical values
                 y_copy = self.y_numerical_scaler.fit_transform(y_copy if isinstance(y_copy, pd.DataFrame) else y_copy.values.reshape(-1, 1))
@@ -168,13 +168,19 @@ class Regressor():
 
         # Get the number of data points
         data_size = X.shape[0]
-        
-        for _ in range(self.nb_epoch):
+
+        learning_rate = self.learning_rate
+
+        for epoch in range(self.nb_epoch):
             if shuffle:
                 # Shuffle the data
                 indices = np.random.permutation(data_size)
                 X = X[indices]
                 Y = Y[indices]
+
+            # Learning rate scheduling
+            if epoch % 10 == 0 and epoch > 0:
+                learning_rate *= 0.9  # Reduce learning rate by 10% every 10 epochs
 
             # Iterate over batches
             for i in range(0, data_size, batch_size):
@@ -188,7 +194,7 @@ class Regressor():
     
                 loss = self.calculate_loss(predictions, y_batch)
                 gradients = self.backward_pass(x_batch, hidden_layer_output, predictions, y_batch)
-                self.update_parameters(gradients)
+                self.update_parameters(gradients, learning_rate)
 
         return self
     
@@ -240,11 +246,11 @@ class Regressor():
                 'bias_input_hidden': np.sum(d_hidden_layer, axis=0, keepdims=True),
                 'bias_hidden_output': np.sum(d_output, axis=0, keepdims=True)}
 
-    def update_parameters(self, gradients):
-        self.weights_input_hidden -= self.learning_rate * gradients['weights_input_hidden']
-        self.weights_hidden_output -= self.learning_rate * gradients['weights_hidden_output']
-        self.bias_input_hidden -= self.learning_rate * gradients['bias_input_hidden']
-        self.bias_hidden_output -= self.learning_rate * gradients['bias_hidden_output']
+    def update_parameters(self, gradients, learning_rate):
+        self.weights_input_hidden -= learning_rate * gradients['weights_input_hidden']
+        self.weights_hidden_output -= learning_rate * gradients['weights_hidden_output']
+        self.bias_input_hidden -= learning_rate * gradients['bias_input_hidden']
+        self.bias_hidden_output -= learning_rate * gradients['bias_hidden_output']
 
         #######################################################################
         #                       ** END OF YOUR CODE **
